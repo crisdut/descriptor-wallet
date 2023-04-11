@@ -9,6 +9,7 @@
 // along with this software.
 // If not, see <https://opensource.org/licenses/Apache-2.0>.
 
+use amplify::Wrapper;
 use bitcoin::util::address::WitnessVersion;
 use bitcoin_scripts::{PubkeyScript, RedeemScript};
 
@@ -52,8 +53,9 @@ impl CompositeDescrType {
         redeem_script: Option<&RedeemScript>,
         witness_script_known: bool,
     ) -> Result<Self, DeductionError> {
+        let script = spk.as_inner();
         let witness_version = spk.witness_version();
-        match (spk, witness_version) {
+        match (script, witness_version) {
             (spk, _) if spk.is_p2pk() => Ok(CompositeDescrType::Pk),
             (spk, _) if spk.is_p2pkh() => Ok(CompositeDescrType::Pkh),
             (spk, _) if spk.is_v0_p2wpkh() => Ok(CompositeDescrType::Wpkh),
@@ -61,7 +63,7 @@ impl CompositeDescrType {
             (spk, _) if spk.is_v1_p2tr() => Ok(CompositeDescrType::Tr),
             (spk, _) if spk.is_p2sh() => {
                 let redeem_script = if let Some(redeem_script) = redeem_script {
-                    redeem_script
+                    redeem_script.as_inner()
                 } else {
                     return Err(DeductionError::P2shWithoutRedeemScript);
                 };

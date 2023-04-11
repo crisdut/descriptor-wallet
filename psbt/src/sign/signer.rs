@@ -340,7 +340,7 @@ impl Input {
         let spent_value = prevout.value;
 
         // Check script_pubkey match and requirements
-        let script_pubkey = PubkeyScript::from_inner(prevout.script_pubkey.clone());
+        let script_pubkey = PubkeyScript::from(prevout.script_pubkey.clone());
         let witness_script = self.witness_script.as_ref();
         let redeem_script = self.redeem_script.as_ref();
 
@@ -359,7 +359,7 @@ impl Input {
             CompositeDescrType::deduce(&script_pubkey, redeem_script, witness_script.is_some())?;
         let sighash = match (descr_type, witness_script) {
             (CompositeDescrType::Wsh, Some(witness_script))
-                if prevout.script_pubkey != witness_script.to_v0_p2wsh() =>
+                if prevout.script_pubkey != witness_script.as_inner().to_v0_p2wsh() =>
             {
                 return Err(SignInputError::ScriptPubkeyMismatch)
             }
@@ -379,14 +379,14 @@ impl Input {
                 return Ok(false);
             }
             (CompositeDescrType::Wpkh, _) | (CompositeDescrType::ShWpkh, _) => {
-                let pubkey_hash = PubkeyHash::from_slice(&script_pubkey[2..22])
+                let pubkey_hash = PubkeyHash::from_slice(&script_pubkey.as_inner()[2..22])
                     .expect("PubkeyHash hash length failure");
                 let script_code = Script::new_p2pkh(&pubkey_hash);
                 sig_hasher.segwit_signature_hash(index, &script_code, spent_value, sighash_type)?
             }
             (CompositeDescrType::Wsh, Some(witness_script))
             | (CompositeDescrType::ShWsh, Some(witness_script)) => sig_hasher
-                .segwit_signature_hash(index, witness_script, spent_value, sighash_type)?,
+                .segwit_signature_hash(index, witness_script.as_inner(), spent_value, sighash_type)?,
             (CompositeDescrType::Wsh, None) | (CompositeDescrType::ShWsh, None) => {
                 return Err(SignInputError::NoWitnessScript)
             }
@@ -394,7 +394,7 @@ impl Input {
                 if self.non_witness_utxo.is_none() {
                     return Err(SignInputError::LegacySpentTransactionMissed);
                 }
-                sig_hasher.legacy_signature_hash(index, &script_pubkey, sighash_type.to_u32())?
+                sig_hasher.legacy_signature_hash(index, &script_pubkey.as_inner(), sighash_type.to_u32())?
             }
         };
 
@@ -441,7 +441,7 @@ impl Input {
         let index = self.index();
 
         // Check script_pubkey match
-        let script_pubkey = PubkeyScript::from_inner(self.input_prevout()?.script_pubkey.clone());
+        let script_pubkey = PubkeyScript::from(self.input_prevout()?.script_pubkey.clone());
         if let Some(internal_key) = self.tap_internal_key {
             if script_pubkey
                 != Script::new_v1_p2tr(provider.secp_context(), internal_key, self.tap_merkle_root)

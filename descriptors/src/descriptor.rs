@@ -659,7 +659,7 @@ impl TryFrom<PubkeyScript> for ScriptPubkeyDescr {
     fn try_from(spk: PubkeyScript) -> Result<Self, Self::Error> {
         let script = spk.as_inner();
         let bytes = script.as_bytes();
-        match (&spk, spk.witness_version()) {
+        match (script, spk.witness_version()) {
             (spk, _) if spk.is_p2pk() && script.len() == 67 => Ok(ScriptPubkeyDescr::Pk(
                 bitcoin::PublicKey::from_slice(&bytes[1..66])?,
             )),

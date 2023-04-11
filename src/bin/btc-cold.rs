@@ -29,7 +29,7 @@ use std::str::FromStr;
 use std::{fmt, fs, io};
 
 use amplify::hex::ToHex;
-use amplify::{IoError, Wrapper};
+use amplify::IoError;
 use bitcoin::consensus::Encodable;
 use bitcoin::psbt::serialize::Serialize;
 use bitcoin::psbt::PartiallySignedTransaction;
@@ -658,7 +658,7 @@ impl Args {
             .iter()
             .map(|a| {
                 (
-                    PubkeyScript::from_inner(a.address.script_pubkey()),
+                    PubkeyScript::from(a.address.script_pubkey()),
                     a.amount,
                 )
             })
