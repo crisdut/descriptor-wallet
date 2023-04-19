@@ -16,9 +16,14 @@
 
 use std::collections::BTreeSet;
 
+use bitcoin::blockdata::opcodes;
+use bitcoin::hashes::Hash;
+use bitcoin::schnorr::TapTweak;
 use bitcoin::secp256k1::SECP256K1;
 use bitcoin::util::psbt::TapTree;
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootBuilder, TaprootBuilderError};
+use bitcoin::util::taproot::{
+    LeafVersion, TapBranchHash, TapLeafHash, TaprootBuilder, TaprootBuilderError,
+};
 use bitcoin::{Script, Txid, XOnlyPublicKey};
 use bitcoin_hd::{DerivationAccount, DeriveError, SegmentIndexes, UnhardenedIndex};
 use bitcoin_onchain::{ResolveTx, TxResolverError};
@@ -115,19 +120,50 @@ impl Psbt {
                 .output
                 .get(input.outpoint.vout as usize)
                 .ok_or(Error::OutputUnknown(txid, input.outpoint.vout))?;
-            let (script_pubkey, dtype, tr_descriptor, pretr_descriptor) = match descriptor {
+            let (script_pubkey, dtype, tr_descriptor, pretr_descriptor, tap_tree) = match descriptor
+            {
                 Descriptor::Tr(_) => {
                     let output_descriptor = DeriveDescriptor::<XOnlyPublicKey>::derive_descriptor(
                         descriptor,
                         SECP256K1,
                         &input.terminal,
                     )?;
-                    (
-                        output_descriptor.script_pubkey(),
-                        descriptors::CompositeDescrType::from(&output_descriptor),
-                        Some(output_descriptor),
-                        None,
-                    )
+
+                    if input.taptweak.is_some() {
+                        let mut tap_tree: Option<TapBranchHash> = None;
+                        let mut tap_script = output_descriptor.script_pubkey();
+                        if let Descriptor::<XOnlyPublicKey>::Tr(tr_desc) = output_descriptor.clone()
+                        {
+                            let internal_key = tr_desc.internal_key().to_x_only_pubkey();
+                            let taptweak = input.taptweak.as_ref().unwrap();
+
+                            let leaf_hash =
+                                TapLeafHash::from_script(&taptweak, LeafVersion::TapScript);
+                            tap_tree = Some(TapBranchHash::from_inner(leaf_hash.into_inner()));
+
+                            let (output_key, _) = internal_key.tap_tweak(SECP256K1, tap_tree);
+                            let builder = bitcoin::blockdata::script::Builder::new();
+                            tap_script = builder
+                                .push_opcode(opcodes::all::OP_PUSHNUM_1)
+                                .push_slice(&output_key.serialize())
+                                .into_script();
+                        }
+                        (
+                            tap_script,
+                            descriptors::CompositeDescrType::from(&output_descriptor),
+                            Some(output_descriptor),
+                            None,
+                            tap_tree,
+                        )
+                    } else {
+                        (
+                            output_descriptor.script_pubkey(),
+                            descriptors::CompositeDescrType::from(&output_descriptor),
+                            Some(output_descriptor),
+                            None,
+                            None,
+                        )
+                    }
                 }
                 _ => {
                     let output_descriptor =
@@ -141,6 +177,7 @@ impl Psbt {
                         descriptors::CompositeDescrType::from(&output_descriptor),
                         None,
                         Some(output_descriptor),
+                        None,
                     )
                 }
             };
@@ -187,6 +224,7 @@ impl Psbt {
             if let Some(Descriptor::<XOnlyPublicKey>::Tr(tr)) = tr_descriptor {
                 psbt_input.bip32_derivation.clear();
                 psbt_input.tap_merkle_root = tr.spend_info().merkle_root();
+                psbt_input.tap_merkle_root = tap_tree;
                 psbt_input.tap_internal_key = Some(tr.internal_key().to_x_only_pubkey());
                 let spend_info = tr.spend_info();
                 psbt_input.tap_scripts = spend_info
