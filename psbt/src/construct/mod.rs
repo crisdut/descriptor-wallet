@@ -14,8 +14,6 @@
 
 //! Functions, errors and traits specific for PSBT constructor role.
 
-use std::collections::BTreeSet;
-
 use bitcoin::blockdata::opcodes;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TapTweak;
@@ -31,6 +29,7 @@ use bitcoin_scripts::PubkeyScript;
 use descriptors::derive::DeriveDescriptor;
 use descriptors::InputDescriptor;
 use miniscript::{Descriptor, ForEachKey, ToPublicKey};
+use std::collections::BTreeSet;
 
 use crate::{self as psbt, Psbt, PsbtVersion};
 
@@ -129,24 +128,25 @@ impl Psbt {
                         &input.terminal,
                     )?;
 
-                    if input.taptweak.is_some() {
+                    if input.tweak.is_some() {
                         let mut tap_tree: Option<TapBranchHash> = None;
                         let mut tap_script = output_descriptor.script_pubkey();
                         if let Descriptor::<XOnlyPublicKey>::Tr(tr_desc) = output_descriptor.clone()
                         {
-                            let internal_key = tr_desc.internal_key().to_x_only_pubkey();
-                            let taptweak = input.taptweak.as_ref().unwrap();
+                            if let Some((_, tweak)) = input.tweak {
+                                let merkel_tree =
+                                    TapBranchHash::from_slice(&tweak).expect("invalid taptweak");
+                                let internal_key = tr_desc.internal_key().to_x_only_pubkey();
+                                let (output_key, _) =
+                                    internal_key.tap_tweak(SECP256K1, Some(merkel_tree));
+                                let builder = bitcoin::blockdata::script::Builder::new();
 
-                            let leaf_hash =
-                                TapLeafHash::from_script(&taptweak, LeafVersion::TapScript);
-                            tap_tree = Some(TapBranchHash::from_inner(leaf_hash.into_inner()));
-
-                            let (output_key, _) = internal_key.tap_tweak(SECP256K1, tap_tree);
-                            let builder = bitcoin::blockdata::script::Builder::new();
-                            tap_script = builder
-                                .push_opcode(opcodes::all::OP_PUSHNUM_1)
-                                .push_slice(&output_key.serialize())
-                                .into_script();
+                                tap_tree = Some(merkel_tree);
+                                tap_script = builder
+                                    .push_opcode(opcodes::all::OP_PUSHNUM_1)
+                                    .push_slice(&output_key.serialize())
+                                    .into_script();
+                            }
                         }
                         (
                             tap_script,
@@ -330,6 +330,7 @@ impl Psbt {
                 let (pubkey, key_source) = account
                     .bip32_derivation(SECP256K1, change_derivation)
                     .expect("already tested descriptor derivation mismatch");
+                println!("{:?}", key_source);
                 bip32_derivation.insert(pubkey, key_source);
                 true
             };

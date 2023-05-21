@@ -16,7 +16,7 @@ use bitcoin::blockdata::transaction::ParseOutPointError;
 use bitcoin::hashes::sha256;
 use bitcoin::util::bip32;
 use bitcoin::util::bip32::Fingerprint;
-use bitcoin::{EcdsaSighashType as SighashType, OutPoint, Script};
+use bitcoin::{EcdsaSighashType as SighashType, OutPoint};
 use bitcoin_blockchain::locks::{self, SeqNo};
 use bitcoin_hd::{DerivationSubpath, UnhardenedIndex};
 
@@ -26,7 +26,6 @@ pub struct InputDescriptor {
     pub terminal: DerivationSubpath<UnhardenedIndex>,
     pub seq_no: SeqNo,
     pub tweak: Option<(Fingerprint, sha256::Hash)>,
-    pub taptweak: Option<Script>,
     pub sighash_type: SighashType,
 }
 
@@ -117,7 +116,6 @@ impl FromStr for InputDescriptor {
             terminal: derivation.parse()?,
             seq_no: none!(),
             tweak: None,
-            taptweak: None,
             sighash_type: SighashType::All,
         };
 
@@ -157,7 +155,6 @@ mod test {
             terminal: "/1/167".parse().unwrap(),
             seq_no: "rbf(1)".parse().unwrap(),
             tweak: None,
-            taptweak: None,
             sighash_type: SighashType::AllPlusAnyoneCanPay,
         };
 
