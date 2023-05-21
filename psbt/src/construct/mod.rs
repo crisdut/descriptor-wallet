@@ -330,7 +330,6 @@ impl Psbt {
                 let (pubkey, key_source) = account
                     .bip32_derivation(SECP256K1, change_derivation)
                     .expect("already tested descriptor derivation mismatch");
-                println!("{:?}", key_source);
                 bip32_derivation.insert(pubkey, key_source);
                 true
             };
