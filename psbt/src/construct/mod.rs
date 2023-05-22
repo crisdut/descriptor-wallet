@@ -23,7 +23,7 @@ use bitcoin::util::taproot::{
     LeafVersion, TapBranchHash, TapLeafHash, TaprootBuilder, TaprootBuilderError,
 };
 use bitcoin::{Script, Txid, XOnlyPublicKey};
-use bitcoin_hd::{DerivationAccount, DeriveError, SegmentIndexes, UnhardenedIndex};
+use bitcoin_hd::{DerivationAccount, DeriveError, UnhardenedIndex};
 use bitcoin_onchain::{ResolveTx, TxResolverError};
 use bitcoin_scripts::PubkeyScript;
 use descriptors::derive::DeriveDescriptor;
@@ -91,7 +91,7 @@ impl Psbt {
         descriptor: &Descriptor<DerivationAccount>,
         inputs: impl IntoIterator<Item = &'inputs InputDescriptor>,
         outputs: impl IntoIterator<Item = &'outputs (PubkeyScript, u64)>,
-        change_index: impl Into<UnhardenedIndex>,
+        change_index: Vec<UnhardenedIndex>,
         fee: u64,
         tx_resolver: &impl ResolveTx,
     ) -> Result<Psbt, Error> {
@@ -324,7 +324,7 @@ impl Psbt {
         };
 
         if change > 0 {
-            let change_derivation = [UnhardenedIndex::one(), change_index.into()];
+            let change_derivation: [UnhardenedIndex; 2] = change_index.try_into().expect("invalid hardened index");
             let mut bip32_derivation = bmap! {};
             let bip32_derivation_fn = |account: &DerivationAccount| {
                 let (pubkey, key_source) = account
